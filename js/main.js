@@ -1,26 +1,18 @@
-/**
- * D'Kriuk Kayola – Main JavaScript
- * Handles: navbar, mobile menu, order builder + price calculator,
- *          form validation, WhatsApp redirect, scroll reveal, toast
- */
+﻿
 
 'use strict';
 
-/* Nomor WhatsApp bisnis (format internasional tanpa +) */
+
 const WA_NUMBER = '6285198040164';
 const WA_DEFAULT_TEXT = "Halo D'Kriuk Kayola, saya ingin memesan...";
 
-/* ================================================================
-   NAVBAR – scroll effect
-   ================================================================ */
+
 const navbar = document.getElementById('navbar');
 window.addEventListener('scroll', () => {
   navbar.classList.toggle('scrolled', window.scrollY > 60);
 }, { passive: true });
 
-/* ================================================================
-   MOBILE NAV TOGGLE
-   ================================================================ */
+
 const navToggle = document.getElementById('navToggle');
 const navLinks  = document.getElementById('navLinks');
 
@@ -49,9 +41,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-/* ================================================================
-   SERVICE SELECT – show/hide address field
-   ================================================================ */
+
 const serviceSelect = document.getElementById('service');
 const addressGroup  = document.getElementById('addressGroup');
 const addressField  = document.getElementById('address');
@@ -63,9 +53,7 @@ serviceSelect.addEventListener('change', () => {
   if (!isDelivery) { addressField.value = ''; clearError('address'); }
 });
 
-/* ================================================================
-   TOAST NOTIFICATION
-   ================================================================ */
+
 const toast = document.getElementById('toast');
 let toastTimer;
 
@@ -73,14 +61,12 @@ function showToast(message, type = 'default') {
   clearTimeout(toastTimer);
   toast.textContent = message;
   toast.className = `toast ${type}`;
-  void toast.offsetWidth; // force reflow
+  void toast.offsetWidth;
   toast.classList.add('show');
   toastTimer = setTimeout(() => toast.classList.remove('show'), 4000);
 }
 
-/* ================================================================
-   FORM VALIDATION HELPERS
-   ================================================================ */
+
 function setError(fieldId, message) {
   const field = document.getElementById(fieldId);
   const error = document.getElementById(fieldId + 'Error');
@@ -99,16 +85,14 @@ function validatePhone(value) {
   return /^(\+62|62|0)[0-9]{8,13}$/.test(value.replace(/\s/g, ''));
 }
 
-/* ================================================================
-   ORDER BUILDER – quantity picker & price calculator
-   ================================================================ */
 
-/** Format angka ke Rupiah: 15000 → "IDR 15.000" */
+
+
 function formatRupiah(amount) {
   return 'IDR ' + amount.toLocaleString('id-ID');
 }
 
-/** Kumpulkan semua item yang qty > 0 */
+
 function getOrderItems() {
   const items = [];
   document.querySelectorAll('#orderBuilder .order-item').forEach(row => {
@@ -125,14 +109,32 @@ function getOrderItems() {
   return items;
 }
 
-/** Hitung total dari semua item */
-function calcTotal(items) {
-  return items.reduce((sum, item) => sum + item.subtotal, 0);
+
+function getSauceItems() {
+  const sauces = [];
+  document.querySelectorAll('input[name="sauce"]:checked').forEach(cb => {
+    const price = parseInt(cb.dataset.price, 10) || 0;
+    sauces.push({
+      name    : cb.value,
+      price,
+      qty     : 1,
+      subtotal: price
+    });
+  });
+  return sauces;
 }
 
-/** Render ringkasan pesanan di UI */
+
+function calcTotal(items, sauces = []) {
+  const menuTotal  = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const sauceTotal = sauces.reduce((sum, s) => sum + s.subtotal, 0);
+  return menuTotal + sauceTotal;
+}
+
+
 function renderSummary() {
   const items        = getOrderItems();
+  const sauces       = getSauceItems();
   const summaryBox   = document.getElementById('orderSummary');
   const summaryLines = document.getElementById('summaryLines');
   const summaryTotal = document.getElementById('summaryTotal');
@@ -143,34 +145,29 @@ function renderSummary() {
     sauceGroup.style.display = 'none';
     return;
   }
-
-  // Tampilkan summary & sauce picker
   summaryBox.style.display = 'block';
   sauceGroup.style.display = 'flex';
 
-  // Render baris per item
-  summaryLines.innerHTML = items.map(item => `
+  const lineHtml = (entry) => `
     <div class="summary-line">
-      <span class="summary-line-name">${item.name}</span>
-      <span class="summary-line-qty">× ${item.qty}</span>
-      <span class="summary-line-subtotal">${formatRupiah(item.subtotal)}</span>
+      <span class="summary-line-name">${entry.name}</span>
+      <span class="summary-line-qty">× ${entry.qty}</span>
+      <span class="summary-line-subtotal">${formatRupiah(entry.subtotal)}</span>
     </div>
-  `).join('');
-
-  // Total
-  summaryTotal.textContent = formatRupiah(calcTotal(items));
-
-  // Highlight baris item yang aktif
+  `;
+  summaryLines.innerHTML = [
+    ...items.map(lineHtml),
+    ...sauces.map(lineHtml)
+  ].join('');
+  summaryTotal.textContent = formatRupiah(calcTotal(items, sauces));
   document.querySelectorAll('#orderBuilder .order-item').forEach(row => {
     const qty = parseInt(row.querySelector('.qty-input').value, 10) || 0;
     row.classList.toggle('has-qty', qty > 0);
   });
-
-  // Hapus error order jika sudah ada item
   clearError('order');
 }
 
-/** Pasang event listener pada semua tombol +/− */
+
 function initOrderBuilder() {
   document.querySelectorAll('#orderBuilder .order-item').forEach(row => {
     const minusBtn = row.querySelector('.qty-minus');
@@ -181,7 +178,6 @@ function initOrderBuilder() {
       const current = parseInt(input.value, 10) || 0;
       if (current < 99) {
         input.value = current + 1;
-        // Animasi bump
         input.classList.add('bump');
         setTimeout(() => input.classList.remove('bump'), 200);
         renderSummary();
@@ -196,11 +192,13 @@ function initOrderBuilder() {
       }
     });
   });
+
+  document.querySelectorAll('input[name="sauce"]').forEach(cb => {
+    cb.addEventListener('change', renderSummary);
+  });
 }
 
-/* ================================================================
-   ORDER FORM SUBMISSION → WhatsApp
-   ================================================================ */
+
 const orderForm = document.getElementById('orderForm');
 
 orderForm.addEventListener('submit', (e) => {
@@ -212,17 +210,9 @@ orderForm.addEventListener('submit', (e) => {
   const address = document.getElementById('address').value.trim();
   const payment = document.getElementById('payment').value;
   const note    = (document.getElementById('orderNote').value || '').trim();
-
-  // Kumpulkan item pesanan
-  const items = getOrderItems();
-  const total = calcTotal(items);
-
-  // Kumpulkan saus yang dipilih
-  const sauces = Array.from(
-    document.querySelectorAll('input[name="sauce"]:checked')
-  ).map(cb => cb.value);
-
-  // Bersihkan error sebelumnya
+  const items  = getOrderItems();
+  const sauces = getSauceItems();
+  const total  = calcTotal(items, sauces);
   ['name','phone','service','address','order','payment'].forEach(clearError);
 
   let valid = true;
@@ -262,8 +252,6 @@ orderForm.addEventListener('submit', (e) => {
     if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-
-  // ── Bangun pesan WhatsApp ──
   const paymentLabels = {
     cash: 'Cash (COD)', bca: 'Transfer BCA', mandiri: 'Transfer Mandiri',
     bri: 'Transfer BRI', gopay: 'GoPay', ovo: 'OVO', dana: 'Dana', shopeepay: 'ShopeePay'
@@ -286,7 +274,9 @@ orderForm.addEventListener('submit', (e) => {
   });
 
   if (sauces.length > 0) {
-    msg += `\n🥫 Saus      : ${sauces.join(', ')}\n`;
+    sauces.forEach(s => {
+      msg += `  • ${s.name}  →  ${formatRupiah(s.subtotal)}\n`;
+    });
   }
   if (note) {
     msg += `📝 Catatan   : ${note}\n`;
@@ -305,7 +295,6 @@ orderForm.addEventListener('submit', (e) => {
 
   setTimeout(() => {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
-    // Reset form
     orderForm.reset();
     addressGroup.style.display = 'none';
     addressField.required = false;
@@ -317,20 +306,16 @@ orderForm.addEventListener('submit', (e) => {
     });
   }, 1200);
 });
-
-// Real-time clear error on blur
 ['name','phone','service','payment'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('blur', () => { if (el.value.trim()) clearError(id); });
 });
 
-/* ================================================================
-   SCROLL REVEAL
-   ================================================================ */
+
 function initScrollReveal() {
   const elements = document.querySelectorAll(
-    '.menu-card, .service-card, .testi-card, .info-card, ' +
-    '.about-feat, .sauce-chip, .payment-group, .section-header'
+    '.menu-card, .menu-category-title, .service-card, .testi-card, .info-card, ' +
+    '.about-feat, .payment-group, .section-header'
   );
 
   elements.forEach(el => {
@@ -354,9 +339,7 @@ function initScrollReveal() {
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 }
 
-/* ================================================================
-   ACTIVE NAV LINK ON SCROLL
-   ================================================================ */
+
 function initActiveNav() {
   const sections   = document.querySelectorAll('section[id]');
   const navAnchors = document.querySelectorAll('.nav-links a[href^="#"]');
@@ -375,17 +358,13 @@ function initActiveNav() {
   sections.forEach(s => observer.observe(s));
 }
 
-/* ================================================================
-   SAUCE CHIP HOVER (menu section)
-   ================================================================ */
+
 document.querySelectorAll('.sauce-chip').forEach(chip => {
   chip.addEventListener('mouseenter', () => { chip.style.transform = 'translateY(-4px) scale(1.05)'; });
   chip.addEventListener('mouseleave', () => { chip.style.transform = ''; });
 });
 
-/* ================================================================
-   INIT
-   ================================================================ */
+
 document.addEventListener('DOMContentLoaded', () => {
   initOrderBuilder();
   initScrollReveal();
